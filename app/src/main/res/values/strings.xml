@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Animated Widgets</string>
+    <string name="add_widget">Add Widget</string>
+    <string name="my_widgets">My Widgets</string>
+    <string name="widget_description">Image/GIF Widget</string>
+    <string name="edit_widget">Options</string>
+    <string name="toggle_animation">Toggle Animation</string>
+    <string name="delete_widget">Delete Widget</string>
+</resources>
