@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.widget.RemoteViews
 import com.bumptech.glide.Glide
 import kotlinx.coroutines.CoroutineScope
@@ -24,14 +25,26 @@ class ImageWidgetProvider : AppWidgetProvider() {
             }
         }
         
-        val intent = Intent(context, GifAnimationService::class.java)
-        context.startService(intent)
+        startService(context)
     }
 
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
-        val intent = Intent(context, GifAnimationService::class.java)
-        context.startService(intent)
+        startService(context)
+    }
+    
+    private fun startService(context: Context) {
+        try {
+            val prefs = WidgetPreferences(context)
+            val intent = Intent(context, GifAnimationService::class.java)
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && prefs.isContinuousModeEnabled()) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        } catch (e: Exception) {
+        }
     }
 
     override fun onDisabled(context: Context) {
@@ -63,8 +76,17 @@ class ImageWidgetProvider : AppWidgetProvider() {
                         
                         appWidgetManager.updateAppWidget(widgetId, views)
                         
-                        val intent = Intent(context, GifAnimationService::class.java)
-                        context.startService(intent)
+                        try {
+                            val prefs = WidgetPreferences(context)
+                            val intent = Intent(context, GifAnimationService::class.java)
+                            
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && prefs.isContinuousModeEnabled()) {
+                                context.startForegroundService(intent)
+                            } else {
+                                context.startService(intent)
+                            }
+                        } catch (e: Exception) {
+                        }
                     }
                     
                 } catch (e: Exception) {

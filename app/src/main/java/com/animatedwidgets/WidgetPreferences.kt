@@ -22,6 +22,14 @@ class WidgetPreferences(context: Context) {
     fun saveWidgetName(widgetId: Int, name: String) {
         prefs.edit().putString("name_$widgetId", name).apply()
     }
+    
+    fun isContinuousModeEnabled(): Boolean {
+        return prefs.getBoolean("continuous_mode", true)
+    }
+    
+    fun setContinuousMode(enabled: Boolean) {
+        prefs.edit().putBoolean("continuous_mode", enabled).apply()
+    }
 
     fun getWidgetImage(widgetId: Int): String? {
         return prefs.getString("widget_$widgetId", null)

@@ -39,6 +39,22 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show()
         }
     }
+    
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        val switchContinuous = findViewById<com.google.android.material.switchmaterial.SwitchMaterial>(R.id.switch_continuous_mode)
+        if (!isGranted) {
+            switchContinuous.isChecked = false
+            widgetPrefs.setContinuousMode(false)
+            Toast.makeText(this, "Continuous mode disabled - notification permission denied", Toast.LENGTH_LONG).show()
+        } else {
+            switchContinuous.isChecked = true
+            widgetPrefs.setContinuousMode(true)
+            restartService()
+            Toast.makeText(this, "Continuous mode enabled", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,11 +69,62 @@ class MainActivity : AppCompatActivity() {
             requestAddWidget()
         }
 
+        setupContinuousModeSwitch()
+        requestInitialPermission()
         loadWidgets()
+    }
+    
+    private fun requestInitialPermission() {
+        if (widgetPrefs.isContinuousModeEnabled()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+        }
+    }
+    
+    private fun setupContinuousModeSwitch() {
+        val switchContinuous = findViewById<com.google.android.material.switchmaterial.SwitchMaterial>(R.id.switch_continuous_mode)
+        switchContinuous.isChecked = widgetPrefs.isContinuousModeEnabled()
+        
+        switchContinuous.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                        != PackageManager.PERMISSION_GRANTED) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        return@setOnCheckedChangeListener
+                    }
+                }
+            }
+            
+            widgetPrefs.setContinuousMode(isChecked)
+            restartService()
+            
+            val message = if (isChecked) "Continuous mode enabled" else "Continuous mode disabled"
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    private fun restartService() {
+        val intent = Intent(this, GifAnimationService::class.java)
+        stopService(intent)
+        
+        if (widgetPrefs.getAllWidgets().any { widgetPrefs.getWidgetAnimateGif(it.widgetId) }) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && widgetPrefs.isContinuousModeEnabled()) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        }
     }
 
     override fun onResume() {
         super.onResume()
+        val switchContinuous = findViewById<com.google.android.material.switchmaterial.SwitchMaterial>(R.id.switch_continuous_mode)
+        switchContinuous.isChecked = widgetPrefs.isContinuousModeEnabled()
         loadWidgets()
     }
 

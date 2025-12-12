@@ -1,11 +1,17 @@
 package com.animatedwidgets
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -19,14 +25,82 @@ class GifAnimationService : Service() {
     private var updateRunnable: Runnable? = null
     private var isRunning = false
     
+    companion object {
+        private const val NOTIFICATION_ID = 1001
+        private const val CHANNEL_ID = "gif_widget_channel"
+    }
+    
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (!isRunning) {
             isRunning = true
+            
+            val prefs = WidgetPreferences(applicationContext)
+            if (prefs.isContinuousModeEnabled()) {
+                try {
+                    startForegroundMode()
+                } catch (e: Exception) {
+                }
+            }
+            
             loadGifs()
             startAnimation()
         }
         
         return START_STICKY
+    }
+    
+    private fun startForegroundMode() {
+        createNotificationChannel()
+        val notification = createNotification()
+        startForeground(NOTIFICATION_ID, notification)
+    }
+    
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Widget Animations",
+                NotificationManager.IMPORTANCE_MIN
+            ).apply {
+                description = "Keeps GIF widgets animated continuously"
+                setShowBadge(false)
+                setSound(null, null)
+                enableVibration(false)
+                enableLights(false)
+            }
+            
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager?.createNotificationChannel(channel)
+        }
+    }
+    
+    private fun createNotification(): Notification {
+        val intent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, CHANNEL_ID)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this)
+        }
+        
+        builder
+            .setContentTitle("Animated Widgets")
+            .setContentText("Continuous mode active")
+            .setSmallIcon(android.R.drawable.ic_menu_gallery)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+        
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            @Suppress("DEPRECATION")
+            builder.setPriority(Notification.PRIORITY_MIN)
+        }
+        
+        return builder.build()
     }
     
     private fun loadGifs() {
