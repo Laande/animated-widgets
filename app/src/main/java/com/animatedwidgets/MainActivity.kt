@@ -219,14 +219,23 @@ class MainActivity : AppCompatActivity() {
         val widgetId = pendingWidgetId
         if (widgetId != null) {
             widgetPrefs.saveWidgetImage(widgetId, uri.toString())
-            widgetPrefs.saveWidgetAnimateGif(widgetId, true)
+            
+            val mimeType = contentResolver.getType(uri)
+            val isGif = mimeType?.contains("gif") == true || uri.toString().lowercase().contains(".gif")
+            widgetPrefs.saveWidgetAnimateGif(widgetId, isGif)
             
             val appWidgetManager = AppWidgetManager.getInstance(this)
             ImageWidgetProvider.updateWidget(this, appWidgetManager, widgetId, uri.toString(), true)
             
-            val intent = Intent(this, GifAnimationService::class.java)
-            stopService(intent)
-            startService(intent)
+            if (isGif) {
+                val intent = Intent(this, GifAnimationService::class.java)
+                stopService(intent)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && widgetPrefs.isContinuousModeEnabled()) {
+                    startForegroundService(intent)
+                } else {
+                    startService(intent)
+                }
+            }
             
             val message = if (isEditingWidget) "Widget updated!" else "Widget created!"
             Toast.makeText(this, message, Toast.LENGTH_SHORT).show()

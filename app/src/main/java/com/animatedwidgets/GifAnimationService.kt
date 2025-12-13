@@ -110,6 +110,8 @@ class GifAnimationService : Service() {
             val componentName = ComponentName(applicationContext, ImageWidgetProvider::class.java)
             val widgetIds = appWidgetManager.getAppWidgetIds(componentName)
             
+            var hasGifs = false
+            
             for (widgetId in widgetIds) {
                 val shouldAnimate = prefs.getWidgetAnimateGif(widgetId)
                 if (!shouldAnimate) continue
@@ -118,17 +120,27 @@ class GifAnimationService : Service() {
                 if (imageUri != null && !gifDrawables.containsKey(widgetId)) {
                     try {
                         val uri = Uri.parse(imageUri)
-                        val inputStream = contentResolver.openInputStream(uri)
-                        if (inputStream != null) {
-                            val bufferedInputStream = java.io.BufferedInputStream(inputStream)
-                            val gifDrawable = GifDrawable(bufferedInputStream)
-                            gifDrawable.loopCount = 0
-                            gifDrawables[widgetId] = gifDrawable
+                        val mimeType = contentResolver.getType(uri)
+                        val isGif = mimeType?.contains("gif") == true || imageUri.lowercase().contains(".gif")
+                        
+                        if (isGif) {
+                            val inputStream = contentResolver.openInputStream(uri)
+                            if (inputStream != null) {
+                                val bufferedInputStream = java.io.BufferedInputStream(inputStream)
+                                val gifDrawable = GifDrawable(bufferedInputStream)
+                                gifDrawable.loopCount = 0
+                                gifDrawables[widgetId] = gifDrawable
+                                hasGifs = true
+                            }
                         }
                     } catch (e: pl.droidsonroids.gif.GifIOException) {
                     } catch (e: Exception) {
                     }
                 }
+            }
+            
+            if (!hasGifs) {
+                stopSelf()
             }
         } catch (e: Exception) {
         }
