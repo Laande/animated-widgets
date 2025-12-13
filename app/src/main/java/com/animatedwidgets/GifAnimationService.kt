@@ -1,5 +1,6 @@
 package com.animatedwidgets
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -15,6 +16,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.widget.RemoteViews
 import pl.droidsonroids.gif.GifDrawable
 
@@ -217,6 +219,36 @@ class GifAnimationService : Service() {
         updateRunnable?.let { handler.removeCallbacks(it) }
         gifDrawables.values.forEach { it.recycle() }
         gifDrawables.clear()
+        
+        scheduleRestart()
+    }
+    
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        scheduleRestart()
+    }
+    
+    private fun scheduleRestart() {
+        try {
+            val prefs = WidgetPreferences(applicationContext)
+            if (prefs.getAllWidgets().any { prefs.getWidgetAnimateGif(it.widgetId) }) {
+                val intent = Intent(applicationContext, ServiceRestartReceiver::class.java)
+                val pendingIntent = PendingIntent.getBroadcast(
+                    applicationContext,
+                    0,
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                
+                val alarmManager = getSystemService(Context.ALARM_SERVICE) as? android.app.AlarmManager
+                alarmManager?.setExactAndAllowWhileIdle(
+                    android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    android.os.SystemClock.elapsedRealtime() + 1000,
+                    pendingIntent
+                )
+            }
+        } catch (e: Exception) {
+        }
     }
     
     override fun onBind(intent: Intent?): IBinder? = null
