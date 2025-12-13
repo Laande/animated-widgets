@@ -3,6 +3,7 @@ package com.animatedwidgets
 import android.Manifest
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -81,6 +82,30 @@ class MainActivity : AppCompatActivity() {
                     != PackageManager.PERMISSION_GRANTED) {
                     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
+            }
+            requestBatteryOptimizationExemption()
+        }
+    }
+    
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                AlertDialog.Builder(this)
+                    .setTitle("Battery Optimization")
+                    .setMessage("For continuous GIF animations, please disable battery optimization for this app.")
+                    .setPositiveButton("Open Settings") { _, _ ->
+                        try {
+                            val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                            intent.data = Uri.parse("package:$packageName")
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            val intent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                            startActivity(intent)
+                        }
+                    }
+                    .setNegativeButton("Skip", null)
+                    .show()
             }
         }
     }
