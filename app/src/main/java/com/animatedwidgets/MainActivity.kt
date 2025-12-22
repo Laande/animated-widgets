@@ -138,11 +138,7 @@ class MainActivity : AppCompatActivity() {
         stopService(intent)
         
         if (widgetPrefs.getAllWidgets().any { widgetPrefs.getWidgetAnimateGif(it.widgetId) }) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && widgetPrefs.isContinuousModeEnabled()) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
+            startService(intent)
         }
     }
 
@@ -230,11 +226,7 @@ class MainActivity : AppCompatActivity() {
             if (isGif) {
                 val intent = Intent(this, GifAnimationService::class.java)
                 stopService(intent)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && widgetPrefs.isContinuousModeEnabled()) {
-                    startForegroundService(intent)
-                } else {
-                    startService(intent)
-                }
+                startService(intent)
             }
             
             val message = if (isEditingWidget) "Widget updated!" else "Widget created!"
@@ -248,44 +240,136 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadWidgets() {
         val widgets = widgetPrefs.getAllWidgets()
-        recyclerView.adapter = WidgetAdapter(
-            widgets,
-            onEditClick = { widget ->
-                isEditingWidget = true
-                pendingWidgetId = widget.widgetId
-                selectImage()
-            },
-            onToggleAnimateClick = { widget ->
-                val currentAnimate = widgetPrefs.getWidgetAnimateGif(widget.widgetId)
-                val newAnimate = !currentAnimate
-                widgetPrefs.saveWidgetAnimateGif(widget.widgetId, newAnimate)
-                
-                val appWidgetManager = AppWidgetManager.getInstance(this)
-                
-                if (!newAnimate) {
-                    ImageWidgetProvider.updateWidget(this, appWidgetManager, widget.widgetId, widget.imageUri, false)
-                } else {
-                    val intent = Intent(this, GifAnimationService::class.java)
-                    stopService(intent)
+        recyclerView.adapter = WidgetAdapter(widgets) { widget ->
+            showWidgetSettingsDialog(widget)
+        }
+    }
+    
+    private fun showWidgetSettingsDialog(widget: WidgetData) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_widget_settings, null)
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+        
+        val btnRename = dialogView.findViewById<Button>(R.id.btn_rename)
+        val btnChangeImage = dialogView.findViewById<Button>(R.id.btn_change_image)
+        val frameAnimate = dialogView.findViewById<android.widget.FrameLayout>(R.id.frame_animate)
+        val switchAnimate = dialogView.findViewById<com.google.android.material.switchmaterial.SwitchMaterial>(R.id.switch_animate)
+        val btnDelete = dialogView.findViewById<Button>(R.id.btn_delete)
+        val btnClose = dialogView.findViewById<Button>(R.id.btn_close)
+        
+        val mimeType = contentResolver.getType(Uri.parse(widget.imageUri))
+        val isGif = mimeType?.contains("gif") == true || widget.imageUri.lowercase().contains(".gif")
+        
+        if (isGif) {
+            frameAnimate.visibility = android.view.View.VISIBLE
+            val isAnimating = widgetPrefs.getWidgetAnimateGif(widget.widgetId)
+            switchAnimate.isChecked = isAnimating
+        } else {
+            frameAnimate.visibility = android.view.View.GONE
+        }
+        
+        btnRename.setOnClickListener {
+            dialog.dismiss()
+            showRenameDialog(widget)
+        }
+        
+        btnChangeImage.setOnClickListener {
+            dialog.dismiss()
+            isEditingWidget = true
+            pendingWidgetId = widget.widgetId
+            selectImage()
+        }
+        
+        switchAnimate.setOnCheckedChangeListener { _, isChecked ->
+            widgetPrefs.saveWidgetAnimateGif(widget.widgetId, isChecked)
+            
+            if (isChecked) {
+                val intent = Intent(this, GifAnimationService::class.java)
+                try {
                     startService(intent)
+                } catch (e: Exception) {
                 }
+            } else {
+                showFirstFrame(widget.widgetId, widget.imageUri)
                 
-                val message = if (newAnimate) "Animation enabled" else "Animation disabled"
-                Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-                loadWidgets()
-            },
-            onDeleteClick = { widget ->
-                AlertDialog.Builder(this)
-                    .setTitle("Delete Widget")
-                    .setMessage("Remove this widget from the list? (Widget will remain on home screen until manually removed)")
-                    .setPositiveButton("Yes") { _, _ ->
-                        widgetPrefs.removeWidget(widget.widgetId)
-                        Toast.makeText(this, "Widget removed", Toast.LENGTH_SHORT).show()
-                        loadWidgets()
+                val hasOtherAnimatingGifs = widgetPrefs.getAllWidgets().any { 
+                    it.widgetId != widget.widgetId && widgetPrefs.getWidgetAnimateGif(it.widgetId) 
+                }
+                if (!hasOtherAnimatingGifs) {
+                    try {
+                        stopService(Intent(this, GifAnimationService::class.java))
+                    } catch (e: Exception) {
                     }
-                    .setNegativeButton("No", null)
-                    .show()
+                }
             }
-        )
+            
+            Toast.makeText(this, if (isChecked) "Animation enabled" else "Animation disabled", Toast.LENGTH_SHORT).show()
+            loadWidgets()
+        }
+        
+        btnDelete.setOnClickListener {
+            dialog.dismiss()
+            AlertDialog.Builder(this)
+                .setTitle("Delete Widget")
+                .setMessage("Remove this widget?")
+                .setPositiveButton("Yes") { _, _ ->
+                    widgetPrefs.removeWidget(widget.widgetId)
+                    Toast.makeText(this, "Widget removed", Toast.LENGTH_SHORT).show()
+                    loadWidgets()
+                }
+                .setNegativeButton("No", null)
+                .show()
+        }
+        
+        btnClose.setOnClickListener {
+            dialog.dismiss()
+        }
+        
+        dialog.show()
+    }
+    
+    private fun showRenameDialog(widget: WidgetData) {
+        val currentName = widgetPrefs.getWidgetName(widget.widgetId) ?: "Widget #${widget.displayId}"
+        val input = android.widget.EditText(this)
+        input.setText(currentName)
+        input.setTextColor(android.graphics.Color.WHITE)
+        
+        AlertDialog.Builder(this)
+            .setTitle("Rename Widget")
+            .setView(input)
+            .setPositiveButton("OK") { _, _ ->
+                val newName = input.text.toString()
+                if (newName.isNotBlank()) {
+                    widgetPrefs.saveWidgetName(widget.widgetId, newName)
+                    loadWidgets()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+    
+    private fun showFirstFrame(widgetId: Int, imageUri: String) {
+        Thread {
+            try {
+                val uri = Uri.parse(imageUri)
+                val bitmap = com.bumptech.glide.Glide.with(applicationContext)
+                    .asBitmap()
+                    .load(uri)
+                    .submit()
+                    .get()
+                
+                runOnUiThread {
+                    try {
+                        val appWidgetManager = AppWidgetManager.getInstance(this)
+                        val views = android.widget.RemoteViews(packageName, R.layout.widget_layout)
+                        views.setImageViewBitmap(R.id.widget_image, bitmap)
+                        appWidgetManager.updateAppWidget(widgetId, views)
+                    } catch (e: Exception) {
+                    }
+                }
+            } catch (e: Exception) {
+            }
+        }.start()
     }
 }

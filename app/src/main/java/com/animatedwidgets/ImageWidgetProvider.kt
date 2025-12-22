@@ -1,5 +1,6 @@
 package com.animatedwidgets
 
+import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
@@ -14,6 +15,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class ImageWidgetProvider : AppWidgetProvider() {
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        
+        if (intent.action == ACTION_START_SERVICE) {
+            try {
+                val serviceIntent = Intent(context, GifAnimationService::class.java)
+                context.startService(serviceIntent)
+            } catch (e: Exception) {
+            }
+        }
+    }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         val prefs = WidgetPreferences(context)
@@ -35,14 +48,8 @@ class ImageWidgetProvider : AppWidgetProvider() {
     
     private fun startService(context: Context) {
         try {
-            val prefs = WidgetPreferences(context)
             val intent = Intent(context, GifAnimationService::class.java)
-            
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && prefs.isContinuousModeEnabled()) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startService(intent)
         } catch (e: Exception) {
         }
     }
@@ -61,6 +68,8 @@ class ImageWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
+        const val ACTION_START_SERVICE = "com.animatedwidgets.START_SERVICE"
+        
         fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, widgetId: Int, imageUri: String, @Suppress("UNUSED_PARAMETER") animateGif: Boolean = true) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
@@ -74,17 +83,27 @@ class ImageWidgetProvider : AppWidgetProvider() {
                         val views = RemoteViews(context.packageName, R.layout.widget_layout)
                         views.setImageViewBitmap(R.id.widget_image, bitmap)
                         
+                        val prefs = WidgetPreferences(context)
+                        val isGif = prefs.getWidgetAnimateGif(widgetId)
+                        
+                        if (isGif) {
+                            val intent = Intent(context, ImageWidgetProvider::class.java).apply {
+                                action = ACTION_START_SERVICE
+                            }
+                            val pendingIntent = PendingIntent.getBroadcast(
+                                context,
+                                widgetId,
+                                intent,
+                                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                            )
+                            views.setOnClickPendingIntent(R.id.widget_image, pendingIntent)
+                        }
+                        
                         appWidgetManager.updateAppWidget(widgetId, views)
                         
                         try {
-                            val prefs = WidgetPreferences(context)
                             val intent = Intent(context, GifAnimationService::class.java)
-                            
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && prefs.isContinuousModeEnabled()) {
-                                context.startForegroundService(intent)
-                            } else {
-                                context.startService(intent)
-                            }
+                            context.startService(intent)
                         } catch (e: Exception) {
                         }
                     }

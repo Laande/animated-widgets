@@ -10,11 +10,7 @@ class ServiceRestartReceiver : BroadcastReceiver() {
         val prefs = WidgetPreferences(context)
         if (prefs.getAllWidgets().any { prefs.getWidgetAnimateGif(it.widgetId) }) {
             val serviceIntent = Intent(context, GifAnimationService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && prefs.isContinuousModeEnabled()) {
-                context.startForegroundService(serviceIntent)
-            } else {
-                context.startService(serviceIntent)
-            }
+            context.startService(serviceIntent)
         }
     }
 }

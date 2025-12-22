@@ -61,7 +61,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Keep animations running (shows notification)"
+                            android:text="Keep animations running"
                             android:textSize="12sp"
                             android:textColor="@android:color/darker_gray"
                             android:layout_marginTop="4dp" />
