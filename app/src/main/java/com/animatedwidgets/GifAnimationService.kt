@@ -12,6 +12,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.widget.RemoteViews
 import pl.droidsonroids.gif.GifDrawable
+import kotlin.math.max
 
 class GifAnimationService : Service() {
     
@@ -61,7 +62,9 @@ class GifAnimationService : Service() {
                             }
                         }
                     } catch (e: pl.droidsonroids.gif.GifIOException) {
+                        android.util.Log.e("GifAnimationService", "GIF IO error for widget $widgetId", e)
                     } catch (e: Exception) {
+                        android.util.Log.e("GifAnimationService", "Error loading GIF for widget $widgetId", e)
                     }
                 }
             }
@@ -70,6 +73,7 @@ class GifAnimationService : Service() {
                 stopSelf()
             }
         } catch (e: Exception) {
+            android.util.Log.e("GifAnimationService", "Error in loadGifs", e)
         }
     }
     
@@ -107,7 +111,7 @@ class GifAnimationService : Service() {
                         
                         if (currentFrame != null && !currentFrame.isRecycled) {
                             val maxSize = 256
-                            val scale = maxSize.toFloat() / Math.max(currentFrame.width, currentFrame.height)
+                            val scale = maxSize.toFloat() / max(currentFrame.width, currentFrame.height)
                             val newWidth = (currentFrame.width * scale).toInt()
                             val newHeight = (currentFrame.height * scale).toInt()
                             val scaledBitmap = Bitmap.createScaledBitmap(currentFrame, newWidth, newHeight, true)
@@ -119,11 +123,12 @@ class GifAnimationService : Service() {
                             
                             val currentFrameIndex = gifDrawable.currentFrameIndex
                             val frameDuration = gifDrawable.getFrameDuration(currentFrameIndex).toLong()
-                            if (frameDuration > 0 && frameDuration < minDelay) {
+                            if (frameDuration in 1..<minDelay) {
                                 minDelay = frameDuration
                             }
                         }
                     } catch (e: Exception) {
+                        android.util.Log.e("GifAnimationService", "Error updating widget $widgetId", e)
                     }
                 }
             }
@@ -133,6 +138,7 @@ class GifAnimationService : Service() {
             }
             
         } catch (e: Exception) {
+            android.util.Log.e("GifAnimationService", "Error in updateWidgets", e)
         }
         
         return minDelay
@@ -161,22 +167,37 @@ class GifAnimationService : Service() {
             }
             
             if (prefs.getAllWidgets().any { prefs.getWidgetAnimateGif(it.widgetId) }) {
-                val intent = Intent(applicationContext, ServiceRestartReceiver::class.java)
-                val pendingIntent = android.app.PendingIntent.getBroadcast(
-                    applicationContext,
-                    0,
-                    intent,
-                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-                )
-                
                 val alarmManager = getSystemService(Context.ALARM_SERVICE) as? android.app.AlarmManager
-                alarmManager?.setExactAndAllowWhileIdle(
-                    android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    android.os.SystemClock.elapsedRealtime() + 1000,
-                    pendingIntent
-                )
+                
+                if (alarmManager != null) {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                        if (!alarmManager.canScheduleExactAlarms()) {
+                            android.util.Log.w("GifAnimationService", "Cannot schedule exact alarms")
+                            return
+                        }
+                    }
+                    
+                    val intent = Intent(applicationContext, ServiceRestartReceiver::class.java)
+                    val pendingIntent = android.app.PendingIntent.getBroadcast(
+                        applicationContext,
+                        0,
+                        intent,
+                        android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                    )
+                    
+                    try {
+                        alarmManager.setExactAndAllowWhileIdle(
+                            android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                            android.os.SystemClock.elapsedRealtime() + 1000,
+                            pendingIntent
+                        )
+                    } catch (e: SecurityException) {
+                        android.util.Log.e("GifAnimationService", "SecurityException scheduling alarm", e)
+                    }
+                }
             }
         } catch (e: Exception) {
+            android.util.Log.e("GifAnimationService", "Error scheduling restart", e)
         }
     }
     

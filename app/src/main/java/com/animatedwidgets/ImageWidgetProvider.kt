@@ -6,7 +6,6 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.widget.RemoteViews
 import com.bumptech.glide.Glide
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +23,7 @@ class ImageWidgetProvider : AppWidgetProvider() {
                 val serviceIntent = Intent(context, GifAnimationService::class.java)
                 context.startService(serviceIntent)
             } catch (e: Exception) {
+                android.util.Log.e("ImageWidgetProvider", "Error starting service", e)
             }
         }
     }
@@ -51,6 +51,7 @@ class ImageWidgetProvider : AppWidgetProvider() {
             val intent = Intent(context, GifAnimationService::class.java)
             context.startService(intent)
         } catch (e: Exception) {
+            android.util.Log.e("ImageWidgetProvider", "Error starting service", e)
         }
     }
 
@@ -105,10 +106,12 @@ class ImageWidgetProvider : AppWidgetProvider() {
                             val intent = Intent(context, GifAnimationService::class.java)
                             context.startService(intent)
                         } catch (e: Exception) {
+                            android.util.Log.e("ImageWidgetProvider", "Error starting service for widget $widgetId", e)
                         }
                     }
                     
                 } catch (e: Exception) {
+                    android.util.Log.e("ImageWidgetProvider", "Error updating widget $widgetId", e)
                 }
             }
         }
