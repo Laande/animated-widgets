@@ -45,11 +45,7 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         val switchContinuous = findViewById<com.google.android.material.switchmaterial.SwitchMaterial>(R.id.switch_continuous_mode)
-        if (!isGranted) {
-            switchContinuous.isChecked = false
-            widgetPrefs.setContinuousMode(false)
-            Toast.makeText(this, "Continuous mode disabled - notification permission denied", Toast.LENGTH_LONG).show()
-        } else {
+        if (isGranted) {
             switchContinuous.isChecked = true
             widgetPrefs.setContinuousMode(true)
             restartService()
@@ -77,12 +73,6 @@ class MainActivity : AppCompatActivity() {
     
     private fun requestInitialPermission() {
         if (widgetPrefs.isContinuousModeEnabled()) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                    != PackageManager.PERMISSION_GRANTED) {
-                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
-            }
             requestBatteryOptimizationExemption()
         }
     }
@@ -115,16 +105,6 @@ class MainActivity : AppCompatActivity() {
         switchContinuous.isChecked = widgetPrefs.isContinuousModeEnabled()
         
         switchContinuous.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                        != PackageManager.PERMISSION_GRANTED) {
-                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        return@setOnCheckedChangeListener
-                    }
-                }
-            }
-            
             widgetPrefs.setContinuousMode(isChecked)
             restartService()
             
@@ -198,9 +178,6 @@ class MainActivity : AppCompatActivity() {
             } else {
                 imagePickerLauncher.launch("image/*")
             }
-        } else if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-            != PackageManager.PERMISSION_GRANTED) {
-            permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
         } else {
             imagePickerLauncher.launch("image/*")
         }

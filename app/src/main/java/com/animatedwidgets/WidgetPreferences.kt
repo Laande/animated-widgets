@@ -47,14 +47,6 @@ class WidgetPreferences(context: Context) {
         return prefs.getInt("display_$widgetId", 0)
     }
 
-    fun getCurrentFrame(widgetId: Int): Int {
-        return prefs.getInt("frame_$widgetId", 0)
-    }
-
-    fun setCurrentFrame(widgetId: Int, frame: Int) {
-        prefs.edit().putInt("frame_$widgetId", frame).apply()
-    }
-
     private fun getNextDisplayId(): Int {
         val allWidgets = getAllWidgets()
         val usedIds = allWidgets.map { it.displayId }.toSet()
@@ -75,14 +67,6 @@ class WidgetPreferences(context: Context) {
             .remove("frame_count_$widgetId")
             .remove("name_$widgetId")
             .apply()
-    }
-    
-    fun getFrameCount(widgetId: Int): Int {
-        return prefs.getInt("frame_count_$widgetId", 0)
-    }
-    
-    fun setFrameCount(widgetId: Int, count: Int) {
-        prefs.edit().putInt("frame_count_$widgetId", count).apply()
     }
 
     fun getAllWidgets(): List<WidgetData> {
