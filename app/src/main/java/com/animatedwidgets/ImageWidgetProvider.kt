@@ -33,12 +33,34 @@ class ImageWidgetProvider : AppWidgetProvider() {
         
         for (widgetId in appWidgetIds) {
             val imageUri = prefs.getWidgetImage(widgetId)
-            if (imageUri != null) {
+            if (imageUri != null && imageUri.isNotEmpty()) {
                 updateWidget(context, appWidgetManager, widgetId, imageUri)
+            } else {
+                prefs.saveWidgetImage(widgetId, "")
+                showPlaceholder(context, appWidgetManager, widgetId)
             }
         }
         
         startService(context)
+    }
+    
+    private fun showPlaceholder(context: Context, appWidgetManager: AppWidgetManager, widgetId: Int) {
+        val views = RemoteViews(context.packageName, R.layout.widget_layout_placeholder)
+        
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("configure_widget_id", widgetId)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            widgetId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        
+        views.setOnClickPendingIntent(R.id.widget_placeholder_text, pendingIntent)
+        
+        appWidgetManager.updateAppWidget(widgetId, views)
     }
 
     override fun onEnabled(context: Context) {

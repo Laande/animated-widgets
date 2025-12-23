@@ -69,6 +69,20 @@ class MainActivity : AppCompatActivity() {
         setupContinuousModeSwitch()
         requestInitialPermission()
         loadWidgets()
+        
+        handleConfigureIntent()
+    }
+    
+    private fun handleConfigureIntent() {
+        val widgetId = intent.getIntExtra("configure_widget_id", -1)
+        if (widgetId != -1) {
+            val imageUri = widgetPrefs.getWidgetImage(widgetId)
+            if (imageUri == null || imageUri.isEmpty()) {
+                pendingWidgetId = widgetId
+                isEditingWidget = false
+                selectImage()
+            }
+        }
     }
     
     private fun requestInitialPermission() {
@@ -235,15 +249,19 @@ class MainActivity : AppCompatActivity() {
         val btnDelete = dialogView.findViewById<Button>(R.id.btn_delete)
         val btnClose = dialogView.findViewById<Button>(R.id.btn_close)
         
-        val mimeType = contentResolver.getType(Uri.parse(widget.imageUri))
-        val isGif = mimeType?.contains("gif") == true || widget.imageUri.lowercase().contains(".gif")
-        
-        if (isGif) {
-            frameAnimate.visibility = android.view.View.VISIBLE
-            val isAnimating = widgetPrefs.getWidgetAnimateGif(widget.widgetId)
-            switchAnimate.isChecked = isAnimating
-        } else {
+        if (widget.imageUri.isEmpty()) {
             frameAnimate.visibility = android.view.View.GONE
+        } else {
+            val mimeType = contentResolver.getType(Uri.parse(widget.imageUri))
+            val isGif = mimeType?.contains("gif") == true || widget.imageUri.lowercase().contains(".gif")
+            
+            if (isGif) {
+                frameAnimate.visibility = android.view.View.VISIBLE
+                val isAnimating = widgetPrefs.getWidgetAnimateGif(widget.widgetId)
+                switchAnimate.isChecked = isAnimating
+            } else {
+                frameAnimate.visibility = android.view.View.GONE
+            }
         }
         
         btnRename.setOnClickListener {

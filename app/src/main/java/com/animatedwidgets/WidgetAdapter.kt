@@ -32,10 +32,14 @@ class WidgetAdapter(
         
         holder.txtWidgetId.text = prefs.getWidgetName(widget.widgetId) ?: "Widget #${widget.displayId}"
         
-        Glide.with(holder.imgPreview.context)
-            .load(Uri.parse(widget.imageUri))
-            .centerCrop()
-            .into(holder.imgPreview)
+        if (widget.imageUri.isEmpty()) {
+            holder.imgPreview.setImageResource(android.R.drawable.ic_menu_gallery)
+        } else {
+            Glide.with(holder.imgPreview.context)
+                .load(Uri.parse(widget.imageUri))
+                .centerCrop()
+                .into(holder.imgPreview)
+        }
 
         holder.btnSettings.setOnClickListener {
             onSettingsClick(widget)
