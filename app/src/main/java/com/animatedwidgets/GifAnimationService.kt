@@ -114,12 +114,22 @@ class GifAnimationService : Service() {
                             val scale = maxSize.toFloat() / max(currentFrame.width, currentFrame.height)
                             val newWidth = (currentFrame.width * scale).toInt()
                             val newHeight = (currentFrame.height * scale).toInt()
-                            val scaledBitmap = Bitmap.createScaledBitmap(currentFrame, newWidth, newHeight, true)
+                            
+                            val config = if (currentFrame.hasAlpha()) Bitmap.Config.ARGB_8888 else Bitmap.Config.RGB_565
+                            val scaledBitmap = Bitmap.createScaledBitmap(currentFrame, newWidth, newHeight, false)
+                            val optimizedBitmap = scaledBitmap.copy(config, false)
                             
                             val views = RemoteViews(packageName, R.layout.widget_layout)
-                            views.setImageViewBitmap(R.id.widget_image, scaledBitmap)
+                            views.setImageViewBitmap(R.id.widget_image, optimizedBitmap)
                             
                             appWidgetManager.updateAppWidget(widgetId, views)
+                            
+                            if (scaledBitmap != currentFrame) {
+                                scaledBitmap.recycle()
+                            }
+                            if (optimizedBitmap != scaledBitmap) {
+                                optimizedBitmap.recycle()
+                            }
                         }
                     } catch (e: Exception) {
                         android.util.Log.e("GifAnimationService", "Error updating widget $widgetId", e)
