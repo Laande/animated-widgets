@@ -18,6 +18,7 @@ class GifAnimationService : Service() {
     
     private val handler = Handler(Looper.getMainLooper())
     private val gifDrawables = mutableMapOf<Int, GifDrawable>()
+    private val bitmapCache = mutableMapOf<Int, Bitmap>()
     private var updateRunnable: Runnable? = null
     private var isRunning = false
     
@@ -106,7 +107,7 @@ class GifAnimationService : Service() {
                 
                 val gifDrawable = gifDrawables[widgetId]
                 if (gifDrawable != null) {
-                    try {
+                                        try {
                         val currentFrame = gifDrawable.currentFrame
                         
                         if (currentFrame != null && !currentFrame.isRecycled) {
@@ -115,21 +116,23 @@ class GifAnimationService : Service() {
                             val newWidth = (currentFrame.width * scale).toInt()
                             val newHeight = (currentFrame.height * scale).toInt()
                             
-                            val config = if (currentFrame.hasAlpha()) Bitmap.Config.ARGB_8888 else Bitmap.Config.RGB_565
-                            val scaledBitmap = Bitmap.createScaledBitmap(currentFrame, newWidth, newHeight, false)
-                            val optimizedBitmap = scaledBitmap.copy(config, false)
+                            var cachedBitmap = bitmapCache[widgetId]
+                            if (cachedBitmap == null || cachedBitmap.isRecycled || 
+                                cachedBitmap.width != newWidth || cachedBitmap.height != newHeight) {
+                                cachedBitmap?.recycle()
+                                cachedBitmap = Bitmap.createBitmap(newWidth, newHeight, Bitmap.Config.RGB_565)
+                                bitmapCache[widgetId] = cachedBitmap
+                            }
+                            
+                            val canvas = Canvas(cachedBitmap)
+                            val srcRect = android.graphics.Rect(0, 0, currentFrame.width, currentFrame.height)
+                            val dstRect = android.graphics.Rect(0, 0, newWidth, newHeight)
+                            canvas.drawBitmap(currentFrame, srcRect, dstRect, null)
                             
                             val views = RemoteViews(packageName, R.layout.widget_layout)
-                            views.setImageViewBitmap(R.id.widget_image, optimizedBitmap)
+                            views.setImageViewBitmap(R.id.widget_image, cachedBitmap)
                             
                             appWidgetManager.updateAppWidget(widgetId, views)
-                            
-                            if (scaledBitmap != currentFrame) {
-                                scaledBitmap.recycle()
-                            }
-                            if (optimizedBitmap != scaledBitmap) {
-                                optimizedBitmap.recycle()
-                            }
                         }
                     } catch (e: Exception) {
                         android.util.Log.e("GifAnimationService", "Error updating widget $widgetId", e)
@@ -154,6 +157,8 @@ class GifAnimationService : Service() {
         updateRunnable?.let { handler.removeCallbacks(it) }
         gifDrawables.values.forEach { it.recycle() }
         gifDrawables.clear()
+        bitmapCache.values.forEach { it.recycle() }
+        bitmapCache.clear()
         
         scheduleRestart()
     }
