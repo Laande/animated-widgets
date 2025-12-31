@@ -88,7 +88,7 @@ class GifAnimationService : Service() {
     }
     
     private fun updateWidgets(): Long {
-        var minDelay = 100L
+        val fixedDelay = 67L
         
         try {
             val prefs = WidgetPreferences(applicationContext)
@@ -120,12 +120,6 @@ class GifAnimationService : Service() {
                             views.setImageViewBitmap(R.id.widget_image, scaledBitmap)
                             
                             appWidgetManager.updateAppWidget(widgetId, views)
-                            
-                            val currentFrameIndex = gifDrawable.currentFrameIndex
-                            val frameDuration = gifDrawable.getFrameDuration(currentFrameIndex).toLong()
-                            if (frameDuration in 1..<minDelay) {
-                                minDelay = frameDuration
-                            }
                         }
                     } catch (e: Exception) {
                         android.util.Log.e("GifAnimationService", "Error updating widget $widgetId", e)
@@ -141,7 +135,7 @@ class GifAnimationService : Service() {
             android.util.Log.e("GifAnimationService", "Error in updateWidgets", e)
         }
         
-        return minDelay
+        return fixedDelay
     }
     
     override fun onDestroy() {
