@@ -3,213 +3,204 @@ package com.animatedwidgets
 import android.app.Service
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.net.Uri
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.widget.RemoteViews
 import pl.droidsonroids.gif.GifDrawable
 import kotlin.math.max
 
 class GifAnimationService : Service() {
     
-    private val handler = Handler(Looper.getMainLooper())
-    private val gifDrawables = mutableMapOf<Int, GifDrawable>()
-    private val bitmapCache = mutableMapOf<Int, Bitmap>()
-    private var updateRunnable: Runnable? = null
-    private var isRunning = false
+    private val gifFrames = mutableMapOf<Int, List<Bitmap>>()
+    private val frameIndices = mutableMapOf<Int, Int>()
+    private val widgetIds = mutableSetOf<Int>()
+    
+    private val pauseLock = Object()
+    @Volatile private var isPaused = false
+    @Volatile private var isRunning = false
+    
+    private var animationThread: Thread? = null
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_PAUSE -> {
+                pauseAnimation()
+                return START_STICKY
+            }
+            ACTION_RESUME -> {
+                resumeAnimation()
+                return START_STICKY
+            }
+        }
+        
         if (!isRunning) {
             isRunning = true
-            loadGifs()
-            startAnimation()
+            loadAndStartAnimations()
         }
         
         return START_STICKY
     }
     
-    private fun loadGifs() {
-        try {
-            val prefs = WidgetPreferences(applicationContext)
-            val appWidgetManager = AppWidgetManager.getInstance(applicationContext)
-            val componentName = ComponentName(applicationContext, ImageWidgetProvider::class.java)
-            val widgetIds = appWidgetManager.getAppWidgetIds(componentName)
-            
-            var hasGifs = false
-            
-            for (widgetId in widgetIds) {
-                val shouldAnimate = prefs.getWidgetAnimateGif(widgetId)
-                if (!shouldAnimate) continue
-                
-                val imageUri = prefs.getWidgetImage(widgetId)
-                if (imageUri != null && !gifDrawables.containsKey(widgetId)) {
-                    try {
-                        val uri = Uri.parse(imageUri)
-                        val mimeType = contentResolver.getType(uri)
-                        val isGif = mimeType?.contains("gif") == true || imageUri.lowercase().contains(".gif")
-                        
-                        if (isGif) {
-                            val inputStream = contentResolver.openInputStream(uri)
-                            if (inputStream != null) {
-                                val bufferedInputStream = java.io.BufferedInputStream(inputStream)
-                                val gifDrawable = GifDrawable(bufferedInputStream)
-                                gifDrawable.loopCount = 0
-                                gifDrawables[widgetId] = gifDrawable
-                                hasGifs = true
-                            }
-                        }
-                    } catch (e: pl.droidsonroids.gif.GifIOException) {
-                        android.util.Log.e("GifAnimationService", "GIF IO error for widget $widgetId", e)
-                    } catch (e: Exception) {
-                        android.util.Log.e("GifAnimationService", "Error loading GIF for widget $widgetId", e)
-                    }
-                }
-            }
-            
-            if (!hasGifs) {
-                stopSelf()
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("GifAnimationService", "Error in loadGifs", e)
+    private fun pauseAnimation() {
+        isPaused = true
+        synchronized(pauseLock) {
+            pauseLock.notifyAll()
         }
     }
     
-    private fun startAnimation() {
-        updateRunnable = object : Runnable {
-            override fun run() {
-                val nextDelay = updateWidgets()
-                handler.postDelayed(this, nextDelay)
-            }
+    private fun resumeAnimation() {
+        isPaused = false
+        synchronized(pauseLock) {
+            pauseLock.notifyAll()
         }
-        handler.post(updateRunnable!!)
     }
     
-    private fun updateWidgets(): Long {
-        val fixedDelay = 67L
+    private fun loadAndStartAnimations() {
+        val prefs = WidgetPreferences(applicationContext)
+        val appWidgetManager = AppWidgetManager.getInstance(applicationContext)
+        val componentName = ComponentName(applicationContext, ImageWidgetProvider::class.java)
+        val ids = appWidgetManager.getAppWidgetIds(componentName)
         
-        try {
-            val prefs = WidgetPreferences(applicationContext)
-            val appWidgetManager = AppWidgetManager.getInstance(applicationContext)
-            val componentName = ComponentName(applicationContext, ImageWidgetProvider::class.java)
-            val widgetIds = appWidgetManager.getAppWidgetIds(componentName)
+        for (widgetId in ids) {
+            if (!prefs.getWidgetAnimateGif(widgetId)) continue
             
-            var hasAnimatingWidget = false
+            val imageUri = prefs.getWidgetImage(widgetId) ?: continue
             
-            for (widgetId in widgetIds) {
-                val shouldAnimate = prefs.getWidgetAnimateGif(widgetId)
-                if (!shouldAnimate) continue
-                
-                hasAnimatingWidget = true
-                
-                val gifDrawable = gifDrawables[widgetId]
-                if (gifDrawable != null) {
-                                        try {
-                        val currentFrame = gifDrawable.currentFrame
-                        
-                        if (currentFrame != null && !currentFrame.isRecycled) {
-                            val maxSize = 256
-                            val scale = maxSize.toFloat() / max(currentFrame.width, currentFrame.height)
-                            val newWidth = (currentFrame.width * scale).toInt()
-                            val newHeight = (currentFrame.height * scale).toInt()
-                            
-                            var cachedBitmap = bitmapCache[widgetId]
-                            if (cachedBitmap == null || cachedBitmap.isRecycled || 
-                                cachedBitmap.width != newWidth || cachedBitmap.height != newHeight) {
-                                cachedBitmap?.recycle()
-                                cachedBitmap = Bitmap.createBitmap(newWidth, newHeight, Bitmap.Config.RGB_565)
-                                bitmapCache[widgetId] = cachedBitmap
-                            }
-                            
-                            val canvas = Canvas(cachedBitmap)
-                            val srcRect = android.graphics.Rect(0, 0, currentFrame.width, currentFrame.height)
-                            val dstRect = android.graphics.Rect(0, 0, newWidth, newHeight)
-                            canvas.drawBitmap(currentFrame, srcRect, dstRect, null)
-                            
-                            val views = RemoteViews(packageName, R.layout.widget_layout)
-                            views.setImageViewBitmap(R.id.widget_image, cachedBitmap)
-                            
-                            appWidgetManager.updateAppWidget(widgetId, views)
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.e("GifAnimationService", "Error updating widget $widgetId", e)
-                    }
+            if (!gifFrames.containsKey(widgetId)) {
+                val frames = extractFrames(imageUri)
+                if (frames.isNotEmpty()) {
+                    gifFrames[widgetId] = frames
+                    frameIndices[widgetId] = 0
+                    widgetIds.add(widgetId)
                 }
+            } else {
+                widgetIds.add(widgetId)
             }
-            
-            if (!hasAnimatingWidget) {
-                stopSelf()
-            }
-            
-        } catch (e: Exception) {
-            android.util.Log.e("GifAnimationService", "Error in updateWidgets", e)
         }
         
-        return fixedDelay
+        if (widgetIds.isEmpty()) {
+            stopSelf()
+        } else if (animationThread == null) {
+            startSynchronizedAnimation()
+        }
+    }
+    
+    private fun extractFrames(imageUri: String): List<Bitmap> {
+        return try {
+            val uri = Uri.parse(imageUri)
+            val mimeType = contentResolver.getType(uri)
+            val isGif = mimeType?.contains("gif") == true || imageUri.lowercase().contains(".gif")
+            
+            if (!isGif) return emptyList()
+            
+            contentResolver.openInputStream(uri)?.use { inputStream ->
+                val gifDrawable = GifDrawable(inputStream.buffered())
+                val frameCount = gifDrawable.numberOfFrames
+                val frames = mutableListOf<Bitmap>()
+                val maxSize = 256
+                
+                for (i in 0 until frameCount) {
+                    gifDrawable.seekToFrame(i)
+                    val currentFrame = gifDrawable.currentFrame ?: continue
+                    if (currentFrame.isRecycled) continue
+                    
+                    val scale = maxSize.toFloat() / max(currentFrame.width, currentFrame.height)
+                    val newWidth = (currentFrame.width * scale).toInt()
+                    val newHeight = (currentFrame.height * scale).toInt()
+                    
+                    val bitmap = Bitmap.createBitmap(newWidth, newHeight, Bitmap.Config.RGB_565)
+                    val canvas = Canvas(bitmap)
+                    val srcRect = android.graphics.Rect(0, 0, currentFrame.width, currentFrame.height)
+                    val dstRect = android.graphics.Rect(0, 0, newWidth, newHeight)
+                    canvas.drawBitmap(currentFrame, srcRect, dstRect, null)
+                    
+                    frames.add(bitmap)
+                }
+                
+                gifDrawable.recycle()
+                frames
+            } ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+    
+    private fun startSynchronizedAnimation() {
+        animationThread = Thread {
+            val appWidgetManager = AppWidgetManager.getInstance(applicationContext)
+            val minUpdateInterval = 150L
+            
+            try {
+                while (isRunning && !Thread.currentThread().isInterrupted) {
+                    while (isPaused && isRunning) {
+                        synchronized(pauseLock) {
+                            pauseLock.wait()
+                        }
+                    }
+                    
+                    if (!isRunning) break
+                    
+                    updateAllWidgets(appWidgetManager)
+                    
+                    Thread.sleep(minUpdateInterval)
+                }
+            } catch (_: InterruptedException) {
+            } catch (_: Exception) {
+            }
+        }.apply { start() }
+    }
+    
+    private fun updateAllWidgets(appWidgetManager: AppWidgetManager) {
+        if (isPaused) return
+        
+        try {
+            for (widgetId in widgetIds) {
+                val frames = gifFrames[widgetId] ?: continue
+                if (frames.isEmpty()) continue
+                
+                val currentIndex = frameIndices[widgetId] ?: 0
+                val bitmap = frames[currentIndex]
+                
+                if (bitmap.isRecycled) continue
+                
+                val views = RemoteViews(packageName, R.layout.widget_layout)
+                views.setImageViewBitmap(R.id.widget_image, bitmap)
+                appWidgetManager.updateAppWidget(widgetId, views)
+                
+                frameIndices[widgetId] = (currentIndex + 1) % frames.size
+            }
+        } catch (_: Exception) {
+        }
     }
     
     override fun onDestroy() {
         super.onDestroy()
         isRunning = false
-        updateRunnable?.let { handler.removeCallbacks(it) }
-        gifDrawables.values.forEach { it.recycle() }
-        gifDrawables.clear()
-        bitmapCache.values.forEach { it.recycle() }
-        bitmapCache.clear()
         
-        scheduleRestart()
-    }
-    
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        super.onTaskRemoved(rootIntent)
-        scheduleRestart()
-    }
-    
-    private fun scheduleRestart() {
-        try {
-            val prefs = WidgetPreferences(applicationContext)
-            if (!prefs.isContinuousModeEnabled()) {
-                return
+        animationThread?.let {
+            it.interrupt()
+            try {
+                it.join(1000)
+            } catch (_: InterruptedException) {
             }
-            
-            if (prefs.getAllWidgets().any { prefs.getWidgetAnimateGif(it.widgetId) }) {
-                val alarmManager = getSystemService(Context.ALARM_SERVICE) as? android.app.AlarmManager
-                
-                if (alarmManager != null) {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                        if (!alarmManager.canScheduleExactAlarms()) {
-                            android.util.Log.w("GifAnimationService", "Cannot schedule exact alarms")
-                            return
-                        }
-                    }
-                    
-                    val intent = Intent(applicationContext, ServiceRestartReceiver::class.java)
-                    val pendingIntent = android.app.PendingIntent.getBroadcast(
-                        applicationContext,
-                        0,
-                        intent,
-                        android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-                    )
-                    
-                    try {
-                        alarmManager.setExactAndAllowWhileIdle(
-                            android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                            android.os.SystemClock.elapsedRealtime() + 1000,
-                            pendingIntent
-                        )
-                    } catch (e: SecurityException) {
-                        android.util.Log.e("GifAnimationService", "SecurityException scheduling alarm", e)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("GifAnimationService", "Error scheduling restart", e)
         }
+        animationThread = null
+        
+        gifFrames.values.forEach { frames ->
+            frames.forEach { it.recycle() }
+        }
+        gifFrames.clear()
+        frameIndices.clear()
+        widgetIds.clear()
     }
     
     override fun onBind(intent: Intent?): IBinder? = null
+    
+    companion object {
+        const val ACTION_PAUSE = "com.animatedwidgets.ACTION_PAUSE"
+        const val ACTION_RESUME = "com.animatedwidgets.ACTION_RESUME"
+    }
 }
