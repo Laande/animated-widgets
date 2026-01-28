@@ -198,7 +198,7 @@ class MainActivity : AppCompatActivity() {
             widgetPrefs.saveWidgetAnimateGif(widgetId, isGif)
             
             val appWidgetManager = AppWidgetManager.getInstance(this)
-            ImageWidgetProvider.updateWidget(this, appWidgetManager, widgetId, uri.toString(), true)
+            ImageWidgetProvider.updateWidget(this, appWidgetManager, widgetId, uri.toString())
             
             if (isGif) {
                 val intent = Intent(this, GifAnimationService::class.java)

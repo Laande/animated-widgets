@@ -22,8 +22,7 @@ class ImageWidgetProvider : AppWidgetProvider() {
             try {
                 val serviceIntent = Intent(context, GifAnimationService::class.java)
                 context.startService(serviceIntent)
-            } catch (e: Exception) {
-                android.util.Log.e("ImageWidgetProvider", "Error starting service", e)
+            } catch (_: Exception) {
             }
         }
     }
@@ -72,8 +71,7 @@ class ImageWidgetProvider : AppWidgetProvider() {
         try {
             val intent = Intent(context, GifAnimationService::class.java)
             context.startService(intent)
-        } catch (e: Exception) {
-            android.util.Log.e("ImageWidgetProvider", "Error starting service", e)
+        } catch (_: Exception) {
         }
     }
 
@@ -93,7 +91,7 @@ class ImageWidgetProvider : AppWidgetProvider() {
     companion object {
         const val ACTION_START_SERVICE = "com.animatedwidgets.START_SERVICE"
         
-        fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, widgetId: Int, imageUri: String, @Suppress("UNUSED_PARAMETER") animateGif: Boolean = true) {
+        fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, widgetId: Int, imageUri: String) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val bitmap = Glide.with(context.applicationContext)
@@ -127,13 +125,11 @@ class ImageWidgetProvider : AppWidgetProvider() {
                         try {
                             val intent = Intent(context, GifAnimationService::class.java)
                             context.startService(intent)
-                        } catch (e: Exception) {
-                            android.util.Log.e("ImageWidgetProvider", "Error starting service for widget $widgetId", e)
+                        } catch (_: Exception) {
                         }
                     }
                     
-                } catch (e: Exception) {
-                    android.util.Log.e("ImageWidgetProvider", "Error updating widget $widgetId", e)
+                } catch (_: Exception) {
                 }
             }
         }
