@@ -33,7 +33,7 @@ class ImageWidgetProvider : AppWidgetProvider() {
         
         for (widgetId in appWidgetIds) {
             val imageUri = prefs.getWidgetImage(widgetId)
-            if (imageUri != null && imageUri.isNotEmpty()) {
+            if (!imageUri.isNullOrEmpty()) {
                 updateWidget(context, appWidgetManager, widgetId, imageUri)
             } else {
                 prefs.saveWidgetImage(widgetId, "")

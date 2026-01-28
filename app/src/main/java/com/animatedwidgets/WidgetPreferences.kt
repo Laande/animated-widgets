@@ -43,7 +43,7 @@ class WidgetPreferences(context: Context) {
         return prefs.getBoolean("animate_$widgetId", true)
     }
 
-    fun getWidgetDisplayId(widgetId: Int): Int {
+    private fun getWidgetDisplayId(widgetId: Int): Int {
         return prefs.getInt("display_$widgetId", 0)
     }
 

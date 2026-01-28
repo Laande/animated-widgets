@@ -40,18 +40,6 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show()
         }
     }
-    
-    private val notificationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        val switchContinuous = findViewById<com.google.android.material.switchmaterial.SwitchMaterial>(R.id.switch_continuous_mode)
-        if (isGranted) {
-            switchContinuous.isChecked = true
-            widgetPrefs.setContinuousMode(true)
-            restartService()
-            Toast.makeText(this, "Continuous mode enabled", Toast.LENGTH_SHORT).show()
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,7 +65,7 @@ class MainActivity : AppCompatActivity() {
         val widgetId = intent.getIntExtra("configure_widget_id", -1)
         if (widgetId != -1) {
             val imageUri = widgetPrefs.getWidgetImage(widgetId)
-            if (imageUri == null || imageUri.isEmpty()) {
+            if (imageUri.isNullOrEmpty()) {
                 pendingWidgetId = widgetId
                 isEditingWidget = false
                 selectImage()
@@ -92,25 +80,23 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun requestBatteryOptimizationExemption() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
-            if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
-                AlertDialog.Builder(this)
-                    .setTitle("Battery Optimization")
-                    .setMessage("For continuous GIF animations, please disable battery optimization for this app.")
-                    .setPositiveButton("Open Settings") { _, _ ->
-                        try {
-                            val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                            intent.data = Uri.parse("package:$packageName")
-                            startActivity(intent)
-                        } catch (e: Exception) {
-                            val intent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                            startActivity(intent)
-                        }
+        val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+            AlertDialog.Builder(this)
+                .setTitle("Battery Optimization")
+                .setMessage("For continuous GIF animations, please disable battery optimization for this app.")
+                .setPositiveButton("Open Settings") { _, _ ->
+                    try {
+                        val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                        intent.data = Uri.parse("package:$packageName")
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        val intent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                        startActivity(intent)
                     }
-                    .setNegativeButton("Skip", null)
-                    .show()
-            }
+                }
+                .setNegativeButton("Skip", null)
+                .show()
         }
     }
     
@@ -283,7 +269,7 @@ class MainActivity : AppCompatActivity() {
                 val intent = Intent(this, GifAnimationService::class.java)
                 try {
                     startService(intent)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                 }
             } else {
                 showFirstFrame(widget.widgetId, widget.imageUri)
@@ -294,7 +280,7 @@ class MainActivity : AppCompatActivity() {
                 if (!hasOtherAnimatingGifs) {
                     try {
                         stopService(Intent(this, GifAnimationService::class.java))
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                     }
                 }
             }
@@ -360,10 +346,10 @@ class MainActivity : AppCompatActivity() {
                         val views = android.widget.RemoteViews(packageName, R.layout.widget_layout)
                         views.setImageViewBitmap(R.id.widget_image, bitmap)
                         appWidgetManager.updateAppWidget(widgetId, views)
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                     }
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
             }
         }.start()
     }
