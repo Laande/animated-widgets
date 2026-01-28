@@ -21,6 +21,7 @@ class GifAnimationService : Service() {
     
     private data class WidgetState(
         val frames: GifFrames,
+        val remoteViews: RemoteViews,
         var currentFrame: Int = 0,
         var nextUpdateTime: Long = 0
     )
@@ -64,7 +65,7 @@ class GifAnimationService : Service() {
                     gif.seekToFrame(i)
                     val frame = gif.currentFrame ?: continue
                     
-                    val size = 128
+                    val size = 256
                     val scale = size.toFloat() / max(frame.width, frame.height)
                     val w = (frame.width * scale).toInt()
                     val h = (frame.height * scale).toInt()
@@ -94,7 +95,7 @@ class GifAnimationService : Service() {
         val ids = manager.getAppWidgetIds(component)
         
         val now = System.currentTimeMillis()
-        var offset = 20
+        var offset = 0
         
         for (id in ids) {
             if (!prefs.getWidgetAnimateGif(id)) continue
@@ -103,7 +104,8 @@ class GifAnimationService : Service() {
             val frames = cache[uri] ?: extractGifFrames(uri) ?: continue
             cache[uri] = frames
             
-            widgets[id] = WidgetState(frames, 0, now + offset)
+            val views = RemoteViews(packageName, R.layout.widget_layout)
+            widgets[id] = WidgetState(frames, views, 0, now + offset)
             offset += 20
         }
         
@@ -123,28 +125,23 @@ class GifAnimationService : Service() {
                 
                 val now = System.currentTimeMillis()
                 var nextWakeup = now + 1000
-                val toUpdate = mutableListOf<Triple<Int, Bitmap, WidgetState>>()
                 
                 for ((widgetId, state) in widgets) {
                     if (now >= state.nextUpdateTime) {
-                        toUpdate.add(Triple(widgetId, state.frames.frames[state.currentFrame], state))
+                        try {
+                            val frame = state.frames.frames[state.currentFrame]
+                            state.remoteViews.setImageViewBitmap(R.id.widget_image, frame)
+                            manager.updateAppWidget(widgetId, state.remoteViews)
+                            
+                            val delay = state.frames.delays[state.currentFrame].toLong()
+                            state.currentFrame = (state.currentFrame + 1) % state.frames.frames.size
+                            state.nextUpdateTime += delay
+                        } catch (_: Exception) {
+                        }
                     }
                     
                     if (state.nextUpdateTime < nextWakeup) {
                         nextWakeup = state.nextUpdateTime
-                    }
-                }
-                
-                for ((widgetId, frame, state) in toUpdate) {
-                    try {
-                        val views = RemoteViews(packageName, R.layout.widget_layout)
-                        views.setImageViewBitmap(R.id.widget_image, frame)
-                        manager.updateAppWidget(widgetId, views)
-                        
-                        val delay = state.frames.delays[state.currentFrame].toLong()
-                        state.currentFrame = (state.currentFrame + 1) % state.frames.frames.size
-                        state.nextUpdateTime += delay
-                    } catch (_: Exception) {
                     }
                 }
                 
